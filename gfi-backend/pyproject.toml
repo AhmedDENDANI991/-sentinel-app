@@ -1,0 +1,25 @@
+[project]
+name = "app"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Devin AI",email = "158243242+devin-ai-integration[bot]@users.noreply.github.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard] (>=0.135.1,<0.136.0)",
+    "psycopg[binary] (>=3.3.3,<4.0.0)",
+    "python-multipart (>=0.0.22,<0.0.23)",
+    "pymupdf (>=1.27.2,<2.0.0)",
+    "openpyxl (>=3.1.5,<4.0.0)",
+    "python-docx (>=1.2.0,<2.0.0)",
+    "pillow (>=12.1.1,<13.0.0)"
+]
+
+[tool.poetry]
+packages = [{include = "app", from = "src"}]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
