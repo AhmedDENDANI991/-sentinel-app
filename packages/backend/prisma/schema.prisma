@@ -1,0 +1,763 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════════════════
+// REFERENTIELS MAITRES
+// ═══════════════════════════════════════════════════════════
+
+model Company {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  legalForm   String?
+  taxId       String?
+  address     String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  projects         Project[]
+  companyAssociates CompanyAssociate[]
+  employees        Employee[]
+  thirdParties     ThirdParty[]
+  costCenters      CostCenter[]
+  documents        Document[]
+  accounts         Account[]
+  journalEntries   JournalEntry[]
+  purchaseOrders   PurchaseOrder[]
+  salesOrders      SalesOrder[]
+  stockLocations   StockLocation[]
+  contracts        Contract[]
+  auditObjects     AuditObject[]
+
+  @@map("companies")
+}
+
+model Associate {
+  id        String   @id @default(uuid())
+  name      String
+  taxId     String?
+  type      String   // PERSON | ENTITY
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  companyAssociates CompanyAssociate[]
+
+  @@map("associates")
+}
+
+model CompanyAssociate {
+  id          String  @id @default(uuid())
+  companyId   String
+  associateId String
+  projectId   String?
+  sharePercent Float
+  role        String? // MAJORITY | MINORITY | MANAGER | SILENT
+
+  company   Company    @relation(fields: [companyId], references: [id])
+  associate Associate  @relation(fields: [associateId], references: [id])
+  project   Project?   @relation(fields: [projectId], references: [id])
+
+  @@unique([companyId, associateId, projectId])
+  @@map("company_associates")
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  companyId   String
+  code        String   @unique
+  name        String
+  type        String   // CONSTRUCTION | PROMOTION | SERVICE | INTERNAL
+  status      String   @default("ACTIVE") // ACTIVE | SUSPENDED | CLOSED | ARCHIVED
+  startDate   DateTime?
+  endDate     DateTime?
+  budget      Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company           Company            @relation(fields: [companyId], references: [id])
+  companyAssociates CompanyAssociate[]
+  costCenters       CostCenter[]
+  documents         Document[]
+  contracts         Contract[]
+  tasks             Task[]
+  auditObjects      AuditObject[]
+
+  @@map("projects")
+}
+
+model CostCenter {
+  id        String  @id @default(uuid())
+  companyId String
+  projectId String?
+  code      String  @unique
+  name      String
+  isActive  Boolean @default(true)
+
+  company  Company  @relation(fields: [companyId], references: [id])
+  project  Project? @relation(fields: [projectId], references: [id])
+
+  journalEntries JournalEntry[]
+
+  @@map("cost_centers")
+}
+
+model ThirdParty {
+  id        String   @id @default(uuid())
+  companyId String?
+  code      String   @unique
+  name      String
+  type      String   // SUPPLIER | CLIENT | BOTH | OTHER
+  taxId     String?
+  address   String?
+  phone     String?
+  email     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company        Company?        @relation(fields: [companyId], references: [id])
+  documents      Document[]
+  journalEntries JournalEntry[]
+  purchaseOrders PurchaseOrder[]
+  salesOrders    SalesOrder[]
+  contracts      Contract[]
+
+  @@map("third_parties")
+}
+
+// ═══════════════════════════════════════════════════════════
+// USERS & RBAC
+// ═══════════════════════════════════════════════════════════
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         String   // ADMIN | DAF | COMPTABLE | RH | JURIDIQUE | ACHATS | COMMERCIAL | CHEF_PROJET | CONTROLE | AUDITEUR | OPERATEUR
+  companyScope String[] // company IDs user can access, empty = all
+  projectScope String[] // project IDs user can access, empty = all
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastLoginAt  DateTime?
+
+  auditLogs       AuditLog[]
+  questionnaires  Questionnaire[]
+  taskValidations TaskValidation[]
+  workflowActions WorkflowAction[]
+
+  @@map("users")
+}
+
+// ═══════════════════════════════════════════════════════════
+// STATE MACHINE & AUDIT OBJECTS
+// ═══════════════════════════════════════════════════════════
+
+// Every ingested object follows the universal state machine
+model AuditObject {
+  id              String   @id @default(uuid())
+  companyId       String?
+  projectId       String?
+  objectType      String   // DOCUMENT | JOURNAL_ENTRY | PURCHASE | SALE | STOCK_MOVE | HR_RECORD | CONTRACT | TASK | PAYMENT
+  objectId        String   // FK to the specific entity
+  fingerprint     String?  // SHA-256 hash of source
+  state           String   @default("RECEIVED") // see ObjectState enum below
+  previousState   String?
+  criticality     String   @default("NORMAL") // LOW | NORMAL | HIGH | CRITICAL
+  reliabilityScore Float?  // 0.0 - 1.0
+  classFamily     String?  // document family classification
+  classPeriod     String?  // period classification YYYY-MM
+  assignedTo      String?  // userId for human action
+  escalatedTo     String?  // userId for escalation
+  escalationLevel Int      @default(0)
+  escalationDeadline DateTime?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company  Company? @relation(fields: [companyId], references: [id])
+  project  Project? @relation(fields: [projectId], references: [id])
+
+  proofRecords    ProofRecord[]
+  stateTransitions StateTransition[]
+  questionnaires  Questionnaire[]
+
+  @@index([objectType, objectId])
+  @@index([state])
+  @@index([companyId])
+  @@index([projectId])
+  @@map("audit_objects")
+}
+
+// States: RECEIVED | FINGERPRINTED | CLASSIFIED_PROVISIONAL | EXTRACTABLE | NOT_EXTRACTABLE |
+//         STRUCTURED | MATCHED | CONTROL_TECHNICAL | CONTROL_BUSINESS | CONTROL_CROSS |
+//         VALIDATED_PROOF | VALIDATED_RESERVE | PENDING_HUMAN | REJECTED_MOTIVATED | EXCLUDED_MOTIVATED | ARCHIVED
+
+model StateTransition {
+  id            String   @id @default(uuid())
+  auditObjectId String
+  fromState     String
+  toState       String
+  reason        String?
+  actorType     String   // SYSTEM | AI_PROPOSAL | HUMAN | RULE_ENGINE | ESCALATION
+  actorId       String?  // userId or system identifier
+  ruleId        String?  // reference to business rule applied
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  auditObject AuditObject @relation(fields: [auditObjectId], references: [id])
+
+  @@index([auditObjectId])
+  @@map("state_transitions")
+}
+
+// ═══════════════════════════════════════════════════════════
+// PROOF REGISTRY (IMMUTABLE)
+// ═══════════════════════════════════════════════════════════
+
+model ProofRecord {
+  id              String   @id @default(uuid())
+  auditObjectId   String
+  fieldName       String   // which field this proof supports
+  sourceFileId    String?  // FK to Document
+  sourcePage      Int?
+  sourceZone      String?  // coordinates or region description
+  ingestionDate   DateTime @default(now())
+  extractionEngine String? // OCR | AI | MANUAL | IMPORT
+  extractionScore Float?   // confidence 0.0 - 1.0
+  validationRule  String?  // rule that validated this
+  decision        String   // VALIDATED | VALIDATED_RESERVE | PENDING | REJECTED | EXCLUDED
+  decisionReason  String?
+  humanActorId    String?
+  timestamp       DateTime @default(now())
+  upstreamProofId String?  // chain link
+  downstreamProofId String? // chain link
+  isImmutable     Boolean  @default(false) // locked after final decision
+  checksum        String?  // integrity hash of this record
+
+  auditObject AuditObject @relation(fields: [auditObjectId], references: [id])
+  sourceFile  Document?   @relation(fields: [sourceFileId], references: [id])
+
+  @@index([auditObjectId])
+  @@index([decision])
+  @@map("proof_records")
+}
+
+// ═══════════════════════════════════════════════════════════
+// SMART QUESTIONNAIRES
+// ═══════════════════════════════════════════════════════════
+
+model Questionnaire {
+  id              String   @id @default(uuid())
+  auditObjectId   String
+  assignedToId    String
+  context         String   // description of the issue
+  missingInfo     String   // what is missing
+  suggestedAnswers Json?   // array of 2-5 suggested answers
+  expectedDocs    Json?    // list of expected documents
+  status          String   @default("PENDING") // PENDING | ANSWERED | ESCALATED | EXPIRED | BATCH_RESOLVED
+  response        String?
+  responseType    String?  // SELECTED_SUGGESTION | FREE_TEXT | DOCUMENT_UPLOAD | BATCH
+  uploadedDocIds  String[] // document IDs uploaded as proof
+  batchGroupId    String?  // group similar cases for batch resolution
+  reminderCount   Int      @default(0)
+  nextReminderAt  DateTime?
+  escalateAfter   DateTime?
+  resolvedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  auditObject AuditObject @relation(fields: [auditObjectId], references: [id])
+  assignedTo  User        @relation(fields: [assignedToId], references: [id])
+
+  @@index([status])
+  @@index([assignedToId])
+  @@map("questionnaires")
+}
+
+// ═══════════════════════════════════════════════════════════
+// BUSINESS RULES ENGINE
+// ═══════════════════════════════════════════════════════════
+
+model BusinessRule {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  module      String   // FINANCE | COMPTA | RH | ACHAT | STOCK | ADV | JURIDIQUE | CRM | MARKETING | TRAVAUX | TRANSVERSE
+  name        String
+  description String?
+  ruleType    String   // VALIDATION | MATCHING | IMPUTATION | ESCALATION | AUTOMATION | THRESHOLD
+  condition   Json     // structured condition
+  action      Json     // structured action
+  automationLevel String // LEVEL_A | LEVEL_B | LEVEL_C
+  priority    Int      @default(100)
+  version     Int      @default(1)
+  isActive    Boolean  @default(true)
+  ownerId     String?  // rule owner userId
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([module])
+  @@index([ruleType])
+  @@map("business_rules")
+}
+
+// ═══════════════════════════════════════════════════════════
+// DOCUMENT MANAGEMENT
+// ═══════════════════════════════════════════════════════════
+
+model Document {
+  id              String   @id @default(uuid())
+  companyId       String?
+  projectId       String?
+  thirdPartyId    String?
+  originalName    String
+  normalizedName  String?
+  storagePath     String
+  mimeType        String
+  sizeBytes       Int
+  fingerprint     String?  // SHA-256 of file content
+  family          String?  // FACTURE | BON | CONTRAT | PV | PHOTO | SCAN | RELEVE | PAIE | AUTRE
+  period          String?  // YYYY-MM
+  status          String   @default("INGESTED") // INGESTED | CLASSIFIED | DUPLICATE | ORPHAN | ARCHIVED
+  isDuplicate     Boolean  @default(false)
+  duplicateOfId   String?
+  isOriginal      Boolean  @default(true)
+  extractedData   Json?    // structured extracted fields
+  ocrConfidence   Float?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company    Company?    @relation(fields: [companyId], references: [id])
+  project    Project?    @relation(fields: [projectId], references: [id])
+  thirdParty ThirdParty? @relation(fields: [thirdPartyId], references: [id])
+
+  proofRecords ProofRecord[]
+
+  @@index([fingerprint])
+  @@index([family])
+  @@index([companyId])
+  @@map("documents")
+}
+
+// ═══════════════════════════════════════════════════════════
+// ACCOUNTING
+// ═══════════════════════════════════════════════════════════
+
+model Account {
+  id        String  @id @default(uuid())
+  companyId String
+  code      String
+  name      String
+  type      String  // ASSET | LIABILITY | EQUITY | REVENUE | EXPENSE
+  isActive  Boolean @default(true)
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  debitEntries  JournalEntry[] @relation("DebitAccount")
+  creditEntries JournalEntry[] @relation("CreditAccount")
+
+  @@unique([companyId, code])
+  @@map("accounts")
+}
+
+model JournalEntry {
+  id            String   @id @default(uuid())
+  companyId     String
+  costCenterId  String?
+  thirdPartyId  String?
+  entryDate     DateTime
+  journal       String   // AC | VE | BA | OD etc
+  reference     String?
+  label         String
+  debitAccountId  String
+  creditAccountId String
+  amount        Float
+  status        String   @default("DRAFT") // DRAFT | PROPOSED | VALIDATED | CORRECTED | REJECTED | RESERVED
+  sourceType    String?  // ORIGINAL | CORRECTED | AUTO_IMPUTED
+  sourceEntryId String?  // link to original if corrected
+  proofStatus   String   @default("MISSING") // PRESENT | MISSING | INCOMPLETE | INCONSISTENT
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company      Company     @relation(fields: [companyId], references: [id])
+  costCenter   CostCenter? @relation(fields: [costCenterId], references: [id])
+  thirdParty   ThirdParty? @relation(fields: [thirdPartyId], references: [id])
+  debitAccount Account     @relation("DebitAccount", fields: [debitAccountId], references: [id])
+  creditAccount Account    @relation("CreditAccount", fields: [creditAccountId], references: [id])
+
+  @@index([companyId, entryDate])
+  @@index([status])
+  @@map("journal_entries")
+}
+
+// ═══════════════════════════════════════════════════════════
+// HR & SPI (Task-based remuneration)
+// ═══════════════════════════════════════════════════════════
+
+model Employee {
+  id           String   @id @default(uuid())
+  companyId    String
+  code         String   @unique
+  firstName    String
+  lastName     String
+  position     String?
+  department   String?
+  contractType String?  // CDI | CDD | FREELANCE | INTERN
+  baseSalary   Float?
+  hireDate     DateTime?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company    Company          @relation(fields: [companyId], references: [id])
+  tasks      Task[]
+  attendances Attendance[]
+  payslips   Payslip[]
+
+  @@map("employees")
+}
+
+model Task {
+  id              String   @id @default(uuid())
+  projectId       String?
+  employeeId      String
+  code            String   @unique
+  title           String
+  description     String?
+  taskType        String   // STANDARD | SPI | MISSION
+  proposedPrice   Float?   // auto-calculated internal price
+  counterPrice    Float?   // employee/manager counter-proposal
+  agreedPrice     Float?   // validated price
+  status          String   @default("CREATED") // CREATED | PROPOSED | NEGOTIATION | AGREED | IN_PROGRESS | COMPLETED | QC_PASS | QC_FAIL | PAID | CANCELLED
+  qualityScore    Float?   // 0-100
+  startedAt       DateTime?
+  completedAt     DateTime?
+  paidAt          DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project    Project?         @relation(fields: [projectId], references: [id])
+  employee   Employee         @relation(fields: [employeeId], references: [id])
+  validations TaskValidation[]
+
+  @@index([status])
+  @@index([employeeId])
+  @@map("tasks")
+}
+
+model TaskValidation {
+  id          String   @id @default(uuid())
+  taskId      String
+  validatorId String
+  type        String   // QUALITY | HIERARCHICAL | PAYMENT_RELEASE
+  decision    String   // APPROVED | REJECTED | REVISION_NEEDED
+  comment     String?
+  createdAt   DateTime @default(now())
+
+  task      Task @relation(fields: [taskId], references: [id])
+  validator User @relation(fields: [validatorId], references: [id])
+
+  @@map("task_validations")
+}
+
+model Attendance {
+  id         String   @id @default(uuid())
+  employeeId String
+  date       DateTime
+  type       String   // PRESENT | ABSENT | MISSION | LEAVE | HOLIDAY
+  hours      Float?
+  createdAt  DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, date])
+  @@map("attendances")
+}
+
+model Payslip {
+  id          String   @id @default(uuid())
+  employeeId  String
+  period      String   // YYYY-MM
+  baseSalary  Float
+  taskBonus   Float    @default(0) // SPI total
+  advances    Float    @default(0)
+  deductions  Float    @default(0)
+  netPay      Float
+  status      String   @default("DRAFT") // DRAFT | CALCULATED | VALIDATED | EXPORTED | PAID
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, period])
+  @@map("payslips")
+}
+
+// ═══════════════════════════════════════════════════════════
+// PURCHASING & STOCK
+// ═══════════════════════════════════════════════════════════
+
+model Article {
+  id          String  @id @default(uuid())
+  code        String  @unique
+  name        String
+  category    String?
+  unit        String  @default("UNIT") // UNIT | KG | M | M2 | M3 | L | PACK
+  minStock    Float?
+  isActive    Boolean @default(true)
+
+  stockMoves     StockMove[]
+  purchaseLines  PurchaseOrderLine[]
+  salesLines     SalesOrderLine[]
+
+  @@map("articles")
+}
+
+model PurchaseOrder {
+  id           String   @id @default(uuid())
+  companyId    String
+  thirdPartyId String
+  reference    String   @unique
+  orderDate    DateTime
+  status       String   @default("DRAFT") // DRAFT | CONFIRMED | RECEIVED | PARTIAL | INVOICED | PAID | CANCELLED
+  totalAmount  Float    @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company    Company              @relation(fields: [companyId], references: [id])
+  thirdParty ThirdParty           @relation(fields: [thirdPartyId], references: [id])
+  lines      PurchaseOrderLine[]
+
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id              String @id @default(uuid())
+  purchaseOrderId String
+  articleId       String
+  quantity        Float
+  unitPrice       Float
+  receivedQty     Float  @default(0)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  article       Article       @relation(fields: [articleId], references: [id])
+
+  @@map("purchase_order_lines")
+}
+
+model StockLocation {
+  id        String @id @default(uuid())
+  companyId String
+  code      String @unique
+  name      String
+  type      String @default("WAREHOUSE") // WAREHOUSE | SITE | TRANSIT | SCRAP
+
+  company    Company     @relation(fields: [companyId], references: [id])
+  stockMoves StockMove[]
+
+  @@map("stock_locations")
+}
+
+model StockMove {
+  id            String   @id @default(uuid())
+  locationId    String
+  articleId     String
+  moveType      String   // IN | OUT | TRANSFER | ADJUSTMENT | RETURN
+  quantity      Float
+  reference     String?
+  sourceDoc     String?  // PO ref, SO ref, etc.
+  createdAt     DateTime @default(now())
+
+  location StockLocation @relation(fields: [locationId], references: [id])
+  article  Article       @relation(fields: [articleId], references: [id])
+
+  @@index([articleId])
+  @@index([locationId])
+  @@map("stock_moves")
+}
+
+// ═══════════════════════════════════════════════════════════
+// SALES / ADV
+// ═══════════════════════════════════════════════════════════
+
+model SalesOrder {
+  id           String   @id @default(uuid())
+  companyId    String
+  thirdPartyId String
+  reference    String   @unique
+  orderDate    DateTime
+  status       String   @default("DRAFT") // DRAFT | QUOTE | CONFIRMED | INVOICED | PARTIAL_PAID | PAID | CANCELLED
+  totalAmount  Float    @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company    Company          @relation(fields: [companyId], references: [id])
+  thirdParty ThirdParty       @relation(fields: [thirdPartyId], references: [id])
+  lines      SalesOrderLine[]
+
+  @@map("sales_orders")
+}
+
+model SalesOrderLine {
+  id           String @id @default(uuid())
+  salesOrderId String
+  articleId    String
+  quantity     Float
+  unitPrice    Float
+
+  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id])
+  article    Article    @relation(fields: [articleId], references: [id])
+
+  @@map("sales_order_lines")
+}
+
+// ═══════════════════════════════════════════════════════════
+// CONTRACTS & LEGAL
+// ═══════════════════════════════════════════════════════════
+
+model Contract {
+  id           String   @id @default(uuid())
+  companyId    String
+  projectId    String?
+  thirdPartyId String?
+  reference    String   @unique
+  type         String   // MARCHE | SOUS_TRAITANCE | PRESTATION | LOCATION | AVENANT | OTHER
+  subject      String
+  amount       Float?
+  startDate    DateTime?
+  endDate      DateTime?
+  status       String   @default("DRAFT") // DRAFT | ACTIVE | SUSPENDED | TERMINATED | LITIGIOUS | ARCHIVED
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company    Company     @relation(fields: [companyId], references: [id])
+  project    Project?    @relation(fields: [projectId], references: [id])
+  thirdParty ThirdParty? @relation(fields: [thirdPartyId], references: [id])
+  legalCases LegalCase[]
+
+  @@map("contracts")
+}
+
+model LegalCase {
+  id           String   @id @default(uuid())
+  contractId   String?
+  reference    String   @unique
+  subject      String
+  parties      Json     // array of party objects
+  status       String   @default("OPEN") // OPEN | HEARING | MEDIATION | JUDGMENT | APPEAL | CLOSED | ARCHIVED
+  amountAtStake Float?
+  nextDeadline DateTime?
+  nextHearing  DateTime?
+  factStatus   String?  // PROVEN | ALLEGED | CONTESTED | MISSING_EVIDENCE
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  contract Contract? @relation(fields: [contractId], references: [id])
+
+  @@map("legal_cases")
+}
+
+// ═══════════════════════════════════════════════════════════
+// WORKFLOW ENGINE
+// ═══════════════════════════════════════════════════════════
+
+model Workflow {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  module      String
+  name        String
+  description String?
+  ownerId     String?
+  validatorId String?
+  arbiterId   String?
+  slaHours    Int?
+  escalateAfterHours Int?
+  isActive    Boolean  @default(true)
+  version     Int      @default(1)
+  steps       Json     // ordered array of step definitions
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  actions WorkflowAction[]
+
+  @@map("workflows")
+}
+
+model WorkflowAction {
+  id          String   @id @default(uuid())
+  workflowId  String
+  objectType  String
+  objectId    String
+  stepIndex   Int
+  stepName    String
+  status      String   @default("PENDING") // PENDING | IN_PROGRESS | COMPLETED | FAILED | SKIPPED | ESCALATED
+  actorId     String?
+  result      Json?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  workflow Workflow @relation(fields: [workflowId], references: [id])
+  actor    User?    @relation(fields: [actorId], references: [id])
+
+  @@index([workflowId])
+  @@index([objectType, objectId])
+  @@map("workflow_actions")
+}
+
+// ═══════════════════════════════════════════════════════════
+// AUDIT LOG (IMMUTABLE)
+// ═══════════════════════════════════════════════════════════
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  action     String   // CREATE | UPDATE | DELETE | LOGIN | OVERRIDE | ESCALATE | VALIDATE | REJECT
+  entityType String
+  entityId   String
+  changes    Json?    // { field: { old, new } }
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ═══════════════════════════════════════════════════════════
+// INTEGRATION EVENTS (n8n bridge)
+// ═══════════════════════════════════════════════════════════
+
+model IntegrationEvent {
+  id          String   @id @default(uuid())
+  source      String   // SENTINEL | N8N | ODOO | HUBSPOT | ROSSUM | AIRCALL | POWERBI
+  target      String
+  eventType   String   // SYNC | WEBHOOK | TRIGGER | CALLBACK
+  payload     Json
+  status      String   @default("PENDING") // PENDING | SENT | ACKNOWLEDGED | FAILED | RETRYING
+  retryCount  Int      @default(0)
+  maxRetries  Int      @default(3)
+  error       String?
+  processedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([status])
+  @@index([source, target])
+  @@map("integration_events")
+}
