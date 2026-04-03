@@ -23,8 +23,9 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', async (request, reply) => {
     try {
       const q = validate(paginationSchema, request.query);
-      const where = request.user.companyScope.length > 0
-        ? { companyId: { in: request.user.companyScope } }
+      const scope = (request.user.companyScope as string[] | null) || [];
+      const where = scope.length > 0
+        ? { companyId: { in: scope } }
         : {};
       const [data, total] = await Promise.all([
         prisma.project.findMany({

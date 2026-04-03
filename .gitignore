@@ -3,5 +3,6 @@ dist/
 .env
 *.log
 .DS_Store
-packages/backend/prisma/*.db
+packages/backend/prisma/sentinel.db
+packages/backend/prisma/sentinel.db-journal
 packages/backend/prisma/migrations/

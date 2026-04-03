@@ -83,12 +83,15 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         ipAddress: request.ip,
       });
 
+      const companyScope = (user.companyScope as string[] | null) || [];
+      const projectScope = (user.projectScope as string[] | null) || [];
+
       const token = app.jwt.sign({
         id: user.id,
         email: user.email,
         role: user.role,
-        companyScope: user.companyScope,
-        projectScope: user.projectScope,
+        companyScope,
+        projectScope,
       });
 
       return {

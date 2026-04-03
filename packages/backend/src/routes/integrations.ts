@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../utils/prisma.js';
 import { validate, paginationSchema, paginatedResponse } from '../utils/validation.js';
 import { handleError } from '../utils/errors.js';
+import { toJson } from '../utils/json.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const eventSchema = z.object({
@@ -44,7 +45,7 @@ export const integrationRoutes: FastifyPluginAsync = async (app) => {
   app.post('/events', async (request, reply) => {
     try {
       const data = validate(eventSchema, request.body);
-      const event = await prisma.integrationEvent.create({ data: data as any });
+      const event = await prisma.integrationEvent.create({ data: { ...data, payload: toJson(data.payload) } as any });
       return reply.status(201).send(event);
     } catch (err) {
       return handleError(err, reply);
@@ -62,7 +63,7 @@ export const integrationRoutes: FastifyPluginAsync = async (app) => {
           source: source.toUpperCase(),
           target: 'SENTINEL',
           eventType: 'WEBHOOK',
-          payload: payload as any,
+          payload: toJson(payload),
           status: 'ACKNOWLEDGED',
           processedAt: new Date(),
         },

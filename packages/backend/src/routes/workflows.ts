@@ -4,6 +4,7 @@ import { prisma } from '../utils/prisma.js';
 import { validate, paginationSchema, paginatedResponse } from '../utils/validation.js';
 import { handleError, notFound } from '../utils/errors.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { toJson, fromJson } from '../utils/json.js';
 
 const createSchema = z.object({
   code: z.string().min(1),
@@ -67,7 +68,7 @@ export const workflowRoutes: FastifyPluginAsync = async (app) => {
   app.post('/', { preHandler: [requireRole('ADMIN')] }, async (request, reply) => {
     try {
       const data = validate(createSchema, request.body);
-      const wf = await prisma.workflow.create({ data: data as any });
+      const wf = await prisma.workflow.create({ data: { ...data, steps: toJson(data.steps) } as any });
       return reply.status(201).send(wf);
     } catch (err) {
       return handleError(err, reply);
@@ -85,7 +86,7 @@ export const workflowRoutes: FastifyPluginAsync = async (app) => {
       const wf = await prisma.workflow.findUnique({ where: { id } });
       if (!wf) throw notFound('Workflow', id);
 
-      const steps = wf.steps as any[];
+      const steps = fromJson<any[]>(wf.steps as string);
       if (stepIndex >= steps.length) {
         return reply.status(400).send({ error: 'Step index out of range' });
       }
@@ -120,7 +121,7 @@ export const workflowRoutes: FastifyPluginAsync = async (app) => {
         where: { id: actionId },
         data: {
           status: status || 'COMPLETED',
-          result: result as any,
+          result: toJson(result),
           completedAt: new Date(),
         },
       });

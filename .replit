@@ -2,7 +2,7 @@ run = "npm run dev"
 entrypoint = "packages/backend/src/server.ts"
 
 [env]
-DATABASE_URL = "postgresql://user:password@localhost:5432/sentinel?schema=public"
+DATABASE_URL = "file:./packages/backend/prisma/sentinel.db"
 JWT_SECRET = "sentinel-replit-dev-secret-change-in-production"
 NODE_ENV = "development"
 PORT = "3000"

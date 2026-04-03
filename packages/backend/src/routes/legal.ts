@@ -5,6 +5,7 @@ import { validate, paginationSchema, paginatedResponse } from '../utils/validati
 import { handleError, notFound } from '../utils/errors.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { logAudit } from '../services/auditLogger.js';
+import { toJson } from '../utils/json.js';
 
 const contractSchema = z.object({
   companyId: z.string().uuid(),
@@ -93,7 +94,7 @@ export const legalRoutes: FastifyPluginAsync = async (app) => {
   app.post('/cases', { preHandler: [requireRole('ADMIN', 'JURIDIQUE')] }, async (request, reply) => {
     try {
       const data = validate(legalCaseSchema, request.body);
-      const legalCase = await prisma.legalCase.create({ data: data as any });
+      const legalCase = await prisma.legalCase.create({ data: { ...data, parties: toJson(data.parties) } as any });
       await logAudit({ userId: request.user.id, action: 'CREATE', entityType: 'LegalCase', entityId: legalCase.id });
       return reply.status(201).send(legalCase);
     } catch (err) {

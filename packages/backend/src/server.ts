@@ -5,6 +5,7 @@ import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { autoInit } from './utils/autoInit.js';
 import { authRoutes } from './routes/auth.js';
 import { companyRoutes } from './routes/companies.js';
 import { projectRoutes } from './routes/projects.js';
@@ -51,14 +52,16 @@ export async function buildApp() {
 
   // Serve frontend in production
   const frontendDist = path.join(__dirname, '../../frontend/dist');
-  await app.register(fastifyStatic, {
-    root: frontendDist,
-    prefix: '/',
-    decorateReply: true,
-    wildcard: false,
-  }).catch(() => {
+  try {
+    await app.register(fastifyStatic, {
+      root: frontendDist,
+      prefix: '/',
+      decorateReply: true,
+      wildcard: false,
+    });
+  } catch {
     app.log.info('Frontend dist not found, skipping static serving');
-  });
+  }
 
   // Auth decorator
   app.decorate('authenticate', async function (request: any, reply: any) {
@@ -109,6 +112,9 @@ export async function buildApp() {
 
 // Start server
 const start = async () => {
+  // Auto-initialize database (SQLite, zero config)
+  await autoInit();
+
   const app = await buildApp();
   const port = parseInt(process.env.PORT || '3000', 10);
   const host = process.env.HOST || '0.0.0.0';

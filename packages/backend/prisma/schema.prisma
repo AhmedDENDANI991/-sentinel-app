@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -144,8 +144,8 @@ model User {
   firstName    String
   lastName     String
   role         String   // ADMIN | DAF | COMPTABLE | RH | JURIDIQUE | ACHATS | COMMERCIAL | CHEF_PROJET | CONTROLE | AUDITEUR | OPERATEUR
-  companyScope String[] // company IDs user can access, empty = all
-  projectScope String[] // project IDs user can access, empty = all
+  companyScope String     @default("[]") // company IDs user can access, empty = all
+  projectScope String     @default("[]") // project IDs user can access, empty = all
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -212,7 +212,7 @@ model StateTransition {
   actorType     String   // SYSTEM | AI_PROPOSAL | HUMAN | RULE_ENGINE | ESCALATION
   actorId       String?  // userId or system identifier
   ruleId        String?  // reference to business rule applied
-  metadata      Json?
+  metadata      String?
   createdAt     DateTime @default(now())
 
   auditObject AuditObject @relation(fields: [auditObjectId], references: [id])
@@ -263,12 +263,12 @@ model Questionnaire {
   assignedToId    String
   context         String   // description of the issue
   missingInfo     String   // what is missing
-  suggestedAnswers Json?   // array of 2-5 suggested answers
-  expectedDocs    Json?    // list of expected documents
+  suggestedAnswers String?   // array of 2-5 suggested answers
+  expectedDocs    String?    // list of expected documents
   status          String   @default("PENDING") // PENDING | ANSWERED | ESCALATED | EXPIRED | BATCH_RESOLVED
   response        String?
   responseType    String?  // SELECTED_SUGGESTION | FREE_TEXT | DOCUMENT_UPLOAD | BATCH
-  uploadedDocIds  String[] // document IDs uploaded as proof
+  uploadedDocIds  String     @default("[]") // document IDs uploaded as proof
   batchGroupId    String?  // group similar cases for batch resolution
   reminderCount   Int      @default(0)
   nextReminderAt  DateTime?
@@ -296,8 +296,8 @@ model BusinessRule {
   name        String
   description String?
   ruleType    String   // VALIDATION | MATCHING | IMPUTATION | ESCALATION | AUTOMATION | THRESHOLD
-  condition   Json     // structured condition
-  action      Json     // structured action
+  condition   String  @default("{}") // structured condition (JSON string)
+  action      String  @default("{}") // structured action (JSON string)
   automationLevel String // LEVEL_A | LEVEL_B | LEVEL_C
   priority    Int      @default(100)
   version     Int      @default(1)
@@ -332,9 +332,9 @@ model Document {
   isDuplicate     Boolean  @default(false)
   duplicateOfId   String?
   isOriginal      Boolean  @default(true)
-  extractedData   Json?    // structured extracted fields
+  extractedData   String?    // structured extracted fields
   ocrConfidence   Float?
-  metadata        Json?
+  metadata        String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -654,7 +654,7 @@ model LegalCase {
   contractId   String?
   reference    String   @unique
   subject      String
-  parties      Json     // array of party objects
+  parties      String  @default("[]") // array of party objects (JSON string)
   status       String   @default("OPEN") // OPEN | HEARING | MEDIATION | JUDGMENT | APPEAL | CLOSED | ARCHIVED
   amountAtStake Float?
   nextDeadline DateTime?
@@ -686,7 +686,7 @@ model Workflow {
   escalateAfterHours Int?
   isActive    Boolean  @default(true)
   version     Int      @default(1)
-  steps       Json     // ordered array of step definitions
+  steps       String  @default("[]") // ordered array of step definitions (JSON string)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -704,7 +704,7 @@ model WorkflowAction {
   stepName    String
   status      String   @default("PENDING") // PENDING | IN_PROGRESS | COMPLETED | FAILED | SKIPPED | ESCALATED
   actorId     String?
-  result      Json?
+  result      String?
   startedAt   DateTime?
   completedAt DateTime?
   createdAt   DateTime @default(now())
@@ -727,7 +727,7 @@ model AuditLog {
   action     String   // CREATE | UPDATE | DELETE | LOGIN | OVERRIDE | ESCALATE | VALIDATE | REJECT
   entityType String
   entityId   String
-  changes    Json?    // { field: { old, new } }
+  changes    String?    // { field: { old, new } }
   ipAddress  String?
   userAgent  String?
   createdAt  DateTime @default(now())
@@ -749,7 +749,7 @@ model IntegrationEvent {
   source      String   // SENTINEL | N8N | ODOO | HUBSPOT | ROSSUM | AIRCALL | POWERBI
   target      String
   eventType   String   // SYNC | WEBHOOK | TRIGGER | CALLBACK
-  payload     Json
+  payload     String  @default("{}") // JSON string
   status      String   @default("PENDING") // PENDING | SENT | ACKNOWLEDGED | FAILED | RETRYING
   retryCount  Int      @default(0)
   maxRetries  Int      @default(3)

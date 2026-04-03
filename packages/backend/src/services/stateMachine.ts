@@ -96,7 +96,7 @@ export async function transitionState(params: TransitionParams) {
         actorType,
         actorId,
         ruleId,
-        metadata: metadata as any,
+        metadata: metadata ? JSON.stringify(metadata) : null,
       },
     }),
   ]);
