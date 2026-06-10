@@ -1,0 +1,5 @@
+# Orchestrateur GENIE_CIVIL_AI
+# langgraph est optionnel : un exécuteur de secours prend le relais s'il est absent.
+langgraph>=0.2.0
+langgraph-checkpoint>=1.0.0
+pydantic>=2.5

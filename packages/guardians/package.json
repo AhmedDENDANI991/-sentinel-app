@@ -1,0 +1,11 @@
+{
+  "name": "@genie/guardians",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Réservé : utilitaires partagés des gardiens. L'implémentation des 14 gardiens vit dans orchestrator/nodes/guardians.py.",
+  "scripts": {
+    "lint": "echo 'lint: guardians'",
+    "typecheck": "echo 'no ts sources yet'",
+    "test": "echo 'no tests'"
+  }
+}

@@ -1,0 +1,122 @@
+# ============================================================================
+# GENIE_CIVIL_AI — stack locale complète.
+#   docker compose -f infra/docker/docker-compose.yml up --build
+# Services : web, api, worker-calcul, worker-import, worker-report, postgres, redis, minio
+# ============================================================================
+name: genie-civil-ai
+
+x-common-env: &common-env
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: ${POSTGRES_USER:-genie}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-dev-only}
+  POSTGRES_DB: ${POSTGRES_DB:-genie_civil}
+  DATABASE_URL: postgresql://${POSTGRES_USER:-genie}:${POSTGRES_PASSWORD:-change-me-dev-only}@postgres:5432/${POSTGRES_DB:-genie_civil}
+  REDIS_URL: redis://redis:6379/0
+  S3_ENDPOINT: http://minio:9000
+  S3_BUCKET: ${S3_BUCKET:-genie-artifacts}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:-change-me-dev-only}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-genie}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-dev-only}
+      POSTGRES_DB: ${POSTGRES_DB:-genie_civil}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../../packages/db/migrations:/docker-entrypoint-initdb.d:ro
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-genie}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-change-me-dev-only}
+    volumes:
+      - miniodata:/data
+    ports: ["9000:9000", "9001:9001"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+    environment:
+      <<: *common-env
+      NODE_ENV: production
+      API_PORT: "3001"
+      JWT_SECRET: ${JWT_SECRET:-change-me-dev-only}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    ports: ["3001:3001"]
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3001
+    depends_on: [api]
+    ports: ["5173:80"]
+
+  worker-calcul:
+    build:
+      context: ../..
+      dockerfile: infra/docker/worker-calcul.Dockerfile
+    environment:
+      <<: *common-env
+      CALC_SERVICE_QUEUE: genie:calc
+    depends_on:
+      redis: { condition: service_healthy }
+
+  worker-import:
+    build:
+      context: ../..
+      dockerfile: infra/docker/worker-python.Dockerfile
+      args:
+        SERVICE: svc-import
+    environment:
+      <<: *common-env
+      IMPORT_SERVICE_QUEUE: genie:import
+    depends_on:
+      redis: { condition: service_healthy }
+
+  worker-report:
+    build:
+      context: ../..
+      dockerfile: infra/docker/worker-python.Dockerfile
+      args:
+        SERVICE: svc-report
+    environment:
+      <<: *common-env
+      REPORT_SERVICE_QUEUE: genie:report
+    depends_on:
+      redis: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  miniodata:

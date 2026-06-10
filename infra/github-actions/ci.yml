@@ -1,0 +1,14 @@
+# Source de référence du workflow CI/CD.
+# Le workflow effectivement exécuté par GitHub est .github/workflows/ci.yml
+# (GitHub n'exécute que ceux du dossier .github/workflows).
+#
+# Version actuelle (simplifiée et autonome) — 3 jobs, uniquement des actions
+# GitHub officielles (pnpm via corepack, pas d'action Marketplace) :
+#   - python-calc : pytest (moteur de calcul)
+#   - node        : pnpm typecheck + test + build (web/api/shared)
+#   - security    : secret scan + pip-audit (non bloquant)
+#
+# Les étapes lourdes ou nécessitant des secrets/infra (docker build, E2E
+# Playwright, déploiement staging/prod) sont fournies via les scripts
+# scripts/deploy-*.sh et tests/e2e, à lancer hors CI de PR ou dans un workflow
+# dédié une fois les runners/secrets disponibles.
