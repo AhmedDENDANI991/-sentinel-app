@@ -8,10 +8,16 @@ export interface JwtUser {
   role: Role;
 }
 
-declare module "fastify" {
-  interface FastifyRequest {
-    user?: JwtUser;
+// Type de l'utilisateur porté par le JWT : @fastify/jwt dérive `request.user`
+// de `FastifyJWT['user']`, ce qui évite tout conflit de modificateurs.
+declare module "@fastify/jwt" {
+  interface FastifyJWT {
+    payload: JwtUser;
+    user: JwtUser;
   }
+}
+
+declare module "fastify" {
   interface FastifyInstance {
     authenticate: typeof authenticate;
     requireRole: typeof requireRole;

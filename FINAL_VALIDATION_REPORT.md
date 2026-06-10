@@ -30,14 +30,18 @@ Si le PDF est fourni, un passage de conformité ligne-à-ligne pourra être ajou
 | **Calculation Guardian** | exécute réellement `pytest` (statut OK) | ✅ VERT |
 | **Secret scan** | `scripts/secret-scan.sh` → aucun secret | ✅ VERT |
 | **Contrats doubles** | Pydantic (`models.py`) ↔ Zod (`shared/index.ts`) cohérents | ✅ |
+| **Chaîne JS installée et testée** | `pnpm install` (265 pkgs), `pnpm -r typecheck` OK | ✅ VERT |
+| **Tests API Vitest** | 4 tests (health, 401 sans JWT, login→JWT→projet 201, ready) | ✅ VERT |
+| **Tests shared Vitest** | 4 tests (contrats Zod) | ✅ VERT |
+| **Builds** | `@genie/web` (vite), `@genie/api` (tsc), `@genie/shared` (tsc) | ✅ VERT |
 
 ## 2. Ce qui est LIVRÉ comme squelette/scaffold cohérent ⚙️
 
 | Élément | État | Pour activer |
 |---|---|---|
-| **API Fastify** (auth JWT, RBAC, projets, upload MIME/taille, calc→Redis) | code complet + tests Vitest écrits | `pnpm install` puis `pnpm --filter @genie/api test` |
-| **Frontend React 18 + Vite** (parcours complet, `data-testid`) | code complet | `pnpm install && pnpm --filter @genie/web build` |
-| **packages/shared** (Zod) + test Vitest | code complet | `pnpm install` |
+| **API Fastify** (auth JWT, RBAC, projets, upload MIME/taille, calc→Redis) | code + tests Vitest **verts** (4/4), build OK | brancher PostgreSQL pour la persistance durable |
+| **Frontend React 18 + Vite** (parcours complet, `data-testid`) | code + **build vite vert** (147 kB) | — |
+| **packages/shared** (Zod) + test Vitest | code + **tests verts** (4/4) | — |
 | **DB** : schéma + migrations SQL (8 tables, énums, contraintes) | complet | appliqué au boot Postgres (compose) |
 | **Docker** : compose 8 services + 4 Dockerfiles + nginx | complet | `pnpm docker:up` |
 | **CI/CD** GitHub Actions (install→lint→typecheck→tests→sécurité→docker→e2e→staging) | complet | actif au push |
@@ -50,8 +54,8 @@ Si le PDF est fourni, un passage de conformité ligne-à-ligne pourra être ajou
 ## 3. Ce qui N'EST PAS fait / limites réelles ⚠️
 
 1. **PDF du CDC non lu** (indisponible) → conformité basée sur la spec embarquée.
-2. **`pnpm install` non exécuté** dans la session (chaîne JS non *buildée* ici) :
-   lint/typecheck/tests JS et E2E sont **prêts** mais **non encore exécutés en vert**.
+2. **E2E Playwright non exécuté en navigateur** (binaire Chromium non installé dans
+   la session) ; spec + config prêtes. Typecheck/tests/builds JS, eux, sont **verts**.
 3. **Pas de déploiement staging/prod réel** : aucune infra Vercel/Railway/Supabase
    provisionnée ni credential fourni. Les scripts s'exécutent en DRY-RUN.
 4. **Connecteurs en mock uniquement** : modes `live` nécessitent Windows + licences
