@@ -1,0 +1,33 @@
+[project]
+name = "genie-calc"
+version = "0.1.0"
+description = "GENIE_CIVIL_AI — moteur de calcul (MCC/MRF/MCS/MD/MCS2/MF/MVR)"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+]
+worker = [
+    "redis>=5.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["genie_calc"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["genie_calc"]

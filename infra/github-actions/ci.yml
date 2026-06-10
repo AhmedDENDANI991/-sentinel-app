@@ -1,0 +1,9 @@
+# Source de référence du workflow CI/CD.
+# Le workflow effectivement exécuté par GitHub se trouve dans
+# .github/workflows/ci.yml (GitHub n'exécute que ceux du dossier .github/workflows).
+# Garder les deux fichiers synchronisés.
+#
+# Pipeline : install -> lint -> typecheck -> tests (JS + Python) -> security
+#            -> docker build -> e2e -> deploy staging (branche main).
+#
+# Voir .github/workflows/ci.yml pour le contenu complet.

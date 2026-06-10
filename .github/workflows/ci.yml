@@ -1,0 +1,95 @@
+# ============================================================================
+# GENIE_CIVIL_AI — CI/CD
+# install -> lint -> typecheck -> tests (JS + Python) -> security -> docker build
+# -> e2e -> (deploy staging sur main)
+# ============================================================================
+name: ci
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-calc:
+    name: Calc engine (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/workers/svc-calcul
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -e ".[dev]"
+      - run: pytest --cov=genie_calc --cov-report=term-missing
+
+  node:
+    name: Web/API (lint, typecheck, test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm -r lint
+      - run: pnpm -r typecheck
+      - run: pnpm -r test
+
+  security:
+    name: Security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Secret scan
+        run: bash scripts/secret-scan.sh
+      - name: Python deps audit
+        run: pip install pip-audit && pip-audit -r apps/workers/svc-calcul/pyproject.toml || true
+      - name: Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with: { config: "p/ci" }
+        continue-on-error: true
+
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    needs: [python-calc]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build worker-calcul image
+        run: docker build -f infra/docker/worker-calcul.Dockerfile -t genie/worker-calcul:ci .
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    needs: [node]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+        continue-on-error: true   # e2e dépend d'un environnement applicatif complet
+
+  deploy-staging:
+    name: Deploy staging
+    runs-on: ubuntu-latest
+    needs: [python-calc, node, security, docker-build]
+    if: github.ref == 'refs/heads/main'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy
+        run: bash scripts/deploy-staging.sh
+        env:
+          STAGING_DEPLOY_TOKEN: ${{ secrets.STAGING_DEPLOY_TOKEN }}
