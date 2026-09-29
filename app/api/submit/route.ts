@@ -1,5 +1,4 @@
 import {PDFDocument,StandardFonts,rgb} from 'pdf-lib';
-export const runtime='edge';
 type D=Record<string,string|number|boolean|null|undefined>;
 const required=['nom','prenom','telephone','email','ville_pays','carte_ae','autorisation_generale','china_to_hub','receive_hub','maritime_to_algeria','site_delivery','primary_hub','hubs','van_status','rotations_month','micro_now','micro_30','micro_90','finance_operation_eur','finance_month_eur','commit_18m','rate_kg_eur','rate_unit_eur','rate_m3_eur','pricing_rule_ack','consent'];
 const clean=(v:unknown)=>String(v??'').trim();
