@@ -1,4 +1,3 @@
-export const runtime='edge';
 const clean=(v:unknown)=>String(v??'').trim();
 function bytes(b64:string){const raw=atob(b64),out=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out}
 export async function POST(req:Request){try{
